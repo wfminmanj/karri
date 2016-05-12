@@ -1,0 +1,21 @@
+@{
+'inbox_src'     = 'inbound_response'
+'inbox_trg'     = 'inbound_archv'
+'inbox_push'    = 'inbound_discard'
+'folder_stage'  = 'c:\tmp\hadar'
+'logfile_name'  = 'hadar_log'
+# 'mailbox' = 'global.grocery.promotions@wholefoods.com'
+'mailbox' = 'jeff.inman@wholefoods.com'
+'prepend' = 'FYI: '
+'opening' = @"
+<p  style="font-family:sans-serif">Greetings,<br>The following files were extracted from this message:</p>
+<ul style="font-family:monospace">
+"@
+'closing' = @"
+</ul><br/><p style="font-family:sans-serif">&gt_ by a Procurement Non-Perishables Analytics PowerShell script</p>
+<p style="font-family:sans-serif"><span style="color:blue">Whole Foods Market | Global Headquarters<br/>
+550 Bowie Street | </span><span style="color:darkred">Austin, TX 78703</span><br/>
+<span style="color:blue">P# 512.477.5566 | F# 512.499.6593</span></p>
+<p><small>&#1491 "&#1489&#1505</small></p>
+"@
+}

@@ -1,0 +1,61 @@
+#### PowerShell Misc ####
+
+# Get-Host
+
+# Restart-Computer
+
+##########################
+#### 1/5 [PowerShell] ####
+
+$idnt = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+$prcp = New-Object System.Security.Principal.WindowsPrincipal($idnt)
+		 
+If ( $prcp.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
+		      If ( "RemoteSigned" -NotContains $(Get-ExecutionPolicy)) { Set-ExecutionPolicy RemoteSigned -Force } }
+    Else { Write-Warning 'Open an Admin Console for This!'}
+
+# Set-ExecutionPolicy RemoteSigned -Force
+
+###################
+#### 2/5 [cmd] ####
+
+@powershell -NoProfile -ExecutionPolicy unrestricted -Command "iex ((new-object net.webclient).DownloadString('https://chocolatey.org/install.ps1'))" && SET PATH=%PATH%;%ALLUSERSPROFILE%\chocolatey\bin
+
+
+##########################
+#### 3/5 [PowerShell] ####
+
+Invoke-Expression ((New-Object Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+
+Restart-Computer
+
+
+##########################
+#### 4/5 [PowerShell] ####
+
+If ((Get-Host).Version.Major -lt 4 ) { choco install powershell4 }
+
+# Restart-Computer
+
+
+##########################
+#### 5/5 [PowerShell] ####
+
+Add-Type @"
+		using System;
+		using System.Runtime.InteropServices;
+
+		namespace mklink
+		{
+		    public class symlink
+		    {
+		        [DllImport("kernel32.dll")]
+		        public static extern bool CreateSymbolicLink(string lpSymlinkFileName, string lpTargetFileName, int dwFlags);
+		    }
+		}
+"@
+
+[mklink.symlink]::CreateSymbolicLink('C:\psg','\\wfm-team\team\RegionalPurchasing\National Promotions\powershell',1)
+
+
+# Restart-Computer
