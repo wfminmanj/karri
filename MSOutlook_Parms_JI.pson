@@ -1,0 +1,5 @@
+@{
+'mailbox' = 'Jeff.Inman@wholefoods.com'
+'subject' = 'banana: feet'
+'csvpath' = 'C:\tmp\junk.csv'
+}
