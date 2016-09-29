@@ -57,12 +57,16 @@ This XML Repo Metadata may not be consistent with the stored files!
 #$strURL   = 'http://sites/global/Grocery/CategoryReview/_vti_bin/Lists.asmx?WSDL'
 # $guidReceived = '{9FCAECAE-11DF-498E-A539-D208AE7A348D}'
 
-$re = "[{0}]" -f ([RegEx]::Escape([String][System.IO.Path]::GetInvalidFileNameChars()))
+# 2016-AUG-19 Jeff I: adding square brackets as problematic characters to the system invalid list
+$xfn = "[{0}]" -f ([RegEx]::Escape([String][System.IO.Path]::GetInvalidFileNameChars()))
+$re = $xfn + '|[\u0132-\u4000]|[\[\]]'
+# $re = "[{0}]" -f ([RegEx]::Escape([String][System.IO.Path]::GetInvalidFileNameChars()))
 
+Add-Type -AssemblyName System.Web
 Add-Type -AssemblyName "Microsoft.Office.Interop.Outlook"
 $outlook    = New-Object -ComObject Outlook.Application
 $namespace  = $outlook.GetNameSpace("MAPI")
-
+<#
 Function Get-SPCRDecline($url, $guid) {
   $rowLimit = "999"
 
@@ -110,6 +114,58 @@ Function Get-SPCRDecline($url, $guid) {
   $ndReturnSE2 = $objSelectProxy.GetListItems($guid, $null, $elemntQuery, $elemntViewFld, $rowLimit, $elemntQueryOpt, $null)
   Return $ndReturnSE2
   }
+#>
+
+Function Get-SPCRDecline($url, $guid) {
+  $rowLimit = "999"
+
+  ## Begin CAML Select Statement
+  ## Assemble a CAML Query that selects items pending decline
+  $xmlDoc = New-Object System.Xml.XmlDocument
+  $xmldecl = $xmlDoc.CreateXmlDeclaration("1.0", "utf-8", $null)
+  $camlView = $xmlDoc.CreateElement("View")
+  $elemntQuery    = $xmlDoc.CreateElement("Query")
+
+  $elemntWhere    = $xmlDoc.CreateElement("Where")
+  $elemntEq       = $xmlDoc.CreateElement("Eq")
+  $elemntFRLock   = $xmlDoc.CreateElement("FieldRef")
+  $elemntFRLock.SetAttribute("Name","PendingAction")
+  $elemntEq.AppendChild($elemntFRLock)   | Out-Null
+  $elemntWhere.AppendChild($elemntEq)    | Out-Null
+  $elemntQuery.AppendChild($elemntWhere) | Out-Null
+  $elemntValue    = $xmlDoc.CreateElement("Value")
+  $elemntValue.SetAttribute("Type","Choice")
+  $elemntValue.InnerText = 'Decline'
+  $elemntEq.AppendChild($elemntValue)    | Out-Null
+  $elemntEq.AppendChild($elemntFRLock)   | Out-Null
+  $elemntWhere.AppendChild($elemntEq)    | Out-Null
+  $elemntQuery.AppendChild($elemntWhere) | Out-Null
+
+  $camlView.AppendChild($elemntQuery) | Out-Null
+  $elemntViewFld  = $xmlDoc.CreateElement("ViewFields")
+
+  $elemntFRID     = $xmlDoc.CreateElement("FieldRef")
+  $elemntFRID.SetAttribute("Name","ID")
+  $elemntSubj     = $xmlDoc.CreateElement("FieldRef")
+  $elemntSubj.SetAttribute("Name","Subject")
+  $elemntLNK     = $xmlDoc.CreateElement("FieldRef")
+  $elemntLNK.SetAttribute("Name","MessageLink")
+  $elemntViewFld.AppendChild($elemntSubj) | Out-Null
+  $elemntViewFld.AppendChild($elemntFRID) | Out-Null
+  $elemntViewFld.AppendChild($elemntLNK)  | Out-Null
+  $camlView.AppendChild($elemntViewFld)   | Out-Null
+
+  $elemntQueryOpt = $xmlDoc.CreateElement("QueryOptions")
+  $camlView.AppendChild($elemntQueryOpt) | Out-Null
+  $xmlDoc.AppendChild($camlView)
+  $xmlDoc.InsertBefore($xmldecl, $camlView) | Out-Null
+  #$xmlDoc.Save("$([System.Environment]::GetEnvironmentVariable('TMP','MACHINE'))\se2_locked.xml")
+  ## End CAML Select Statement
+
+  $objSelectProxy = New-WebServiceProxy -Uri $url  -Namespace SpWs  -UseDefaultCredential
+  $ndReturnSE2 = $objSelectProxy.GetListItems($guid, $null, $elemntQuery, $elemntViewFld, $rowLimit, $elemntQueryOpt, $null)
+  Return $ndReturnSE2
+  }
 
 #### Get List Items with PendingAction = 'Decline' ####
 $banana = Get-SPCRDecline $P.SPURI $P.SPListGUID
@@ -136,12 +192,18 @@ $xmlDoc = New-Object System.Xml.XmlDocument
 $xmldecl = $xmlDoc.CreateXmlDeclaration("1.0", "utf-8", $null)
 $camlBatch = $xmlDoc.CreateElement("Batch")
 
+$n=1
 $itemseq = 1
 $msgerrors = 0
 ForEach ( $i in $orange ) {
 
-#### Begin Decline Message #### $P
-  $msgkey = [System.Security.SecurityElement]::Escape(($i.ows_Subject -Replace $re, '-'))
+ #### Begin Decline Message #### $P
+  Write-Progress -Activity "Processing List Items" -Status $i.ows_Subject -PercentComplete $n
+  Write-Host -BackgroundColor Green -ForegroundColor Black "[[ $($i.ows_Subject) ]]" -NoNewline
+  # $msgkey = [System.Security.SecurityElement]::Escape(($i.ows_Subject -Replace $re, '-'))
+  # $i.ows_MessageLink
+  $i.ows_MessageLink -match '(?<=\?msgkey=).*(?=,)' | Out-Null
+  $msgkey = $Matches[0]
   $msghtmlxcd = [System.Web.HttpUtility]::HtmlDecode($msgkey)
   $nodemsg = $X.SelectSingleNode("/repo/messages/msg[@msgkey='$($msgkey)']")
         If ( $nodemsg ) {
@@ -162,12 +224,13 @@ ForEach ( $i in $orange ) {
                   If ( $usagemode -eq 'MsgDisplay' ) { $rail.Display() }
                   ElseIf ( $usagemode -eq 'MsgSend' ) { $rail.Send() } }
                   Catch { $msgerrors ++ } 
+                  Write-Host [char]60 -NoNewline
                }
                Else { Write-Host "Repo message not found for [$($i.ows_Subject)]" }
 
-####  End  Decline Message ####
+ ####  End  Decline Message ####
 
-#### Begin CAML Batch Build ####
+ #### Begin CAML Batch Build ####
   
   If ( $msgerrors -eq 0 ) {
       $camlItem = $xmlDoc.CreateElement("Method")
@@ -188,11 +251,15 @@ ForEach ( $i in $orange ) {
       $camlItem.AppendChild($camlStatus)  | Out-Null
       $camlItem.AppendChild($camlAction)  | Out-Null
       $camlBatch.AppendChild($camlItem) | Out-Null
+      Write-Host [char]62 -NoNewline
     }
 
-####  End  CAML Batch Build ####
+ ####  End  CAML Batch Build ####
 
+  
   $itemseq ++
+  $n++
+  Write-Host "    $itemseq"
   $msgerrors = 0
   $msg = $null
   $peach = $null
