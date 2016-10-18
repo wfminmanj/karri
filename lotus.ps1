@@ -209,10 +209,14 @@ Catch { Write-Host -Back Black -Fore Red "ERROR attempting to match source folde
 Try { $olsrcfolder = $( Recurse-Folders $namespace $P.SourceFolder )[0] }
 Catch { Write-Host -Back Black -Fore Red "ERROR attempting to match source folder name $($P.SourceFolder)" }
 
+## Use this line for Inbox
 $olsrcfolder = $olsrcfolder.Folders | Where-Object { 'Inbox' -Contains $_.Name }
 
 # Get a collection of messages from the source folder
 $colmsg = $olsrcfolder.Items | Where-Object {$_.Categories -match $P.ExportTag}
+
+If ($colmsg.Count -gt 1 ) { $cardcount = $colmsg.Count }
+Else { $cardcount = 1 }
 
 <#
 $colmsg | Select-Object -Property ConversationTopic,ConversationID | Format-Table -AutoSize
@@ -223,7 +227,10 @@ $colmsg | Select-Object -Property ConversationTopic,ConversationID | Format-Tabl
 |__) |__  / _` | |\ |     |\/| |__  /__` /__`  /\  / _` |__     |    /  \ /  \ |__)
 |__) |___ \__> | | \|     |  | |___ .__/ .__/ /~~\ \__> |___    |___ \__/ \__/ |
 #>
+$card = 1
 ForEach ( $i in $colmsg ) {
+Write-Progress -Activity "Processing Messages" -Status "Loading $card of $cardcount" -PercentComplete (100*$card/$cardcount)
+      
 
 $MG = New-Object –TypeName PSObject
 $MG | Add-Member –M NoteProperty –Name attachments –Val $i.Attachments.Count
@@ -239,18 +246,24 @@ $xlfiles = @()
 $brandguess = 'TBD'
 $categoryguess = 'TBD'
 
-# Create a key value for the message based on Conversation Topic
-$msgkey = [System.Security.SecurityElement]::Escape(($i.ConversationTopic -Replace $re, '-'))
-# Create a file name based on the subject; replace spaces so it makes a readable URL
-$msgfn = $i.Subject -Replace $re, '-'
-$i.SaveAs("$repopath\$sc\$msgfn.msg", $olSaveType::olMSG)
-$fsimage = $olApp.CreateItemFromTemplate("$repopath\$sc\$msgfn.msg") 
-
 # Get the Sender Email as $sender
 If ( $i.SenderEmailType -eq 'EX' ) {
      $exuser = $olApp.Session.GetGlobalAddressList().AddressEntries.Item($i.Sender.Name)
      $sender = $exuser.GetExchangeUser().PrimarySmtpAddress }
    Else { $sender = $i.SenderEmailAddress }
+
+# Create a key value for the message based on Conversation Topic
+## $msgkey = [System.Security.SecurityElement]::Escape(($i.ConversationTopic -Replace $re, '-'))
+If ($i.ConversationTopic.Length -gt 5 ) {
+$msgkey = $i.ConversationTopic -Replace '[\W-[\.]]', '-' }
+Else {$msgkey = "Empty-Subject-($($i.ConversationTopic -Replace '[\W-[\.]]', '-'))-From-$($sender -Replace '[\W-[\.]]', '-')"}
+#-#}
+
+# Create a file name based on the subject; replace spaces so it makes a readable URL
+## $msgfn = $i.Subject -Replace $re, '-'
+$msgfn = $msgkey
+$i.SaveAs("$repopath\$sc\$msgfn.msg", $olSaveType::olMSG)
+$fsimage = $olApp.CreateItemFromTemplate("$repopath\$sc\$msgfn.msg") 
 
 # Get a review round from the message categories
 $arycat = $($i.Categories -Split [char]44 | ForEach{ $_.Trim()})
@@ -337,27 +350,37 @@ If ( $MG.attachments -gt 0 ) {
    ForEach ( $a in $i.Attachments ) {
    If ( $a.FileName -match '.zip?$' ) { # Begin Zip Files
     $MG.zipattachments ++
-    $a.SaveAsFile("$repopath\$se\$($a.FileName)")
-    $b = Get-Item "$repopath\$se\$($a.FileName)"
+    $zipName = ($a.FileName -Replace '[\]]', '}') -Replace '[\[]', '{'
+    ## $a.SaveAsFile("$repopath\$se\$($a.FileName)")
+    $a.SaveAsFile("$repopath\$se\$zipName")
+    ## $b = Get-Item "$repopath\$se\$($a.FileName)"
+    $b = Get-Item "$repopath\$se\$zipName"
     [IO.Compression.ZipFile]::ExtractToDirectory( $b.FullName, "$($b.Directory)\$($b.BaseName)" )
     $fz = $( Get-ChildItem "$($b.Directory)\$($b.BaseName)" -Recurse -File )
     ForEach ( $k in $fz ) {
+        $myfname = $k.Name
         $kchksum = Get-CheckSum $k.FullName
         $klmdt = $k.LastWriteTime.ToString('s')
         $cimatch = 0
+        ## 
         If ( Test-Path "$repopath\$($k.Name)") { # When the file name already exists, compare the checksum
           ForEach ( $ci in Get-ChildItem "$repopath\$($k.BaseName)*" ) {
                 If ( $kchksum -contains $(Get-Checksum $ci) ) { $cimatch ++ }}}
           If ( $cimatch -gt 0 ) { # When there is a match on checksum, don't save the file
               $MG.skippedfiles ++
               Add-Content $Logfile -Value "  - **SKIPPING $($k.Name)**"
+              ##
               Remove-Item "$repopath\$se\$($k.Name)" }
           Else { # Move file to destination add try to append a file node
+              ##
               $nom = Get-UnqFilePath $repopath $k.Name
               Move-Item $k.FullName -Destination $nom
               Set-ItemProperty $nom -Name IsReadOnly -Value $true
               $MG.savedfiles ++
               If ( $nom -match '.xls[x|m]?$' ) { $xlfiles += $nom }
+              ##
+              ##
+              ##
               If ( $usagemode -eq 'FileOnly' ) { Write-Host "----> $($k.Name) [$($k.Length)_B]" }
               Else { $abody += "<li>$($k.Name) [$($k.Length)_B]</li>" }
               Add-Content $Logfile -Value "  - **$($k.Name)**, $($k.Length)_Bytes, at $($nom)" }
@@ -365,6 +388,7 @@ If ( $MG.attachments -gt 0 ) {
           If ( -not $nodefile ) { # When a file node with the current chksum doesn't exist, append the node
               $banana = Get-Item $nom
               $nodefile = $X.CreateElement('file')
+              ## 
               $nodefile.SetAttribute('name',$k.Name)
               $nodefile.SetAttribute('lmdt',$klmdt)
               $nodefile.SetAttribute('bytes',$k.Length)
@@ -375,12 +399,16 @@ If ( $MG.attachments -gt 0 ) {
    ElseIf ( $a.FileName -match '^ATT0.*\.htm?$' ) { $MG.sigattachments ++ }
    ElseIf ( $a.FileName -match '^ATT0.*\.txt?$' ) { $MG.sigattachments ++ }
    Else { # Begin Non-Zip Files
-    $a.SaveAsFile( "$repopath\$sc\$($a.FileName)" )
-    $banana = Get-Item "$repopath\$sc\$($a.FileName)"
+    $atfn = $a.FileName -Replace '[\W-[\.]]', '-' 
+    ## $a.SaveAsFile( "$repopath\$sc\$($a.FileName)" )
+    ## $banana = Get-Item "$repopath\$sc\$($a.FileName)"
+    $a.SaveAsFile( "$repopath\$sc\$atfn" )
+    $banana = Get-Item "$repopath\$sc\$atfn"
     $bchksum = Get-Checksum $banana.FullName
     $blmdt = $banana.LastWriteTime.ToString('s')
     $cimatch = 0
-    If ( Test-Path "$repopath\$($a.FileName)" ) { # When the file name already exists, compare the checksum
+    ## If ( Test-Path "$repopath\$($a.FileName)" ) { # When the file name already exists, compare the checksum
+    If ( Test-Path "$repopath\$atfn" ) { # When the file name already exists, compare the checksum
           ForEach ( $ci in Get-ChildItem "$repopath\$($banana.BaseName)*" ) {
                 If ( $bchksum -contains $(Get-Checksum $ci) ) { $cimatch ++ }}}
     If ( $cimatch -gt 0 ) { # When there is a match on checksum, don't save the file
@@ -395,9 +423,12 @@ If ( $MG.attachments -gt 0 ) {
           #-$lmdt = Get-ChildItem $nom | Select-Object -Prop LastWriteTime
           $MG.savedfiles ++
           If ( $nom -match '.xls[x|m]?$' ) { $xlfiles += $nom }
-          If ( $usagemode -eq 'FileOnly' ) { Write-Host "----> $($a.FileName) [$($a.Size)_B]" }
-          Else { $abody += "<li>$($a.FileName) [$($a.Size)_B]</li>" }
-          Add-Content $Logfile -Value "  - **$($a.FileName)**, $($a.Size)_Bytes, at $($nom)" }
+          ## If ( $usagemode -eq 'FileOnly' ) { Write-Host "----> $($a.FileName) [$($a.Size)_B]" }
+          ## Else { $abody += "<li>$($a.FileName) [$($a.Size)_B]</li>" }
+          ## Add-Content $Logfile -Value "  - **$($a.FileName)**, $($a.Size)_Bytes, at $($nom)" }
+          If ( $usagemode -eq 'FileOnly' ) { Write-Host "----> $atfn [$($a.Size)_B]" }
+          Else { $abody += "<li>$atfn [$($a.Size)_B]</li>" }
+          Add-Content $Logfile -Value "  - **$atfn**, $($a.Size)_Bytes, at $($nom)" }
       $nodefile = $X.SelectSingleNode("/repo/messages/msg[@msgkey='$($msgkey)']/attachments/file[@chksum='$($bchksum)']")
       If ( -not $nodefile ) { # When a file node with the current chksum doesn't exist, append the node
           $nodefile = $X.CreateElement('file')
@@ -444,12 +475,16 @@ $ndReturnSEL = $objSP.GetListItems($P.SPListGUID, $null, $elemntQuery, $elemntVi
 If ($ndReturnSEL.Data.ItemCount -gt 0 ) {
 $MG | Add-Member –M NoteProperty –Name sp –Val   'skip-duplicate'
 Write-Warning "MessageLink is already populated in SharePoint"
-} Else {
+} 
+Else {
 # Insert a PS List Item
 If ( $xlfiles.Count -gt 0 ) { #Check for guess values 
     If ( -not $Excel ) { $Excel = New-Object -ComObject Excel.Application }
     ForEach ( $xl in $xlfiles ) {
+        $tmpEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'SilentlyContinue'
         $wb = $Excel.Workbooks.Open($xl)
+        $ErrorActionPreference = $tmpEAP
         If ( $wb ) {
           # lotus
           $properties = $wb.BuiltInDocumentProperties
@@ -496,6 +531,7 @@ If ( $xlfiles.Count -gt 0 ) { #Check for guess values
                   [System.Runtime.Interopservices.Marshal]::ReleaseComObject($wb) | Out-Null
                   Remove-Variable wb
                   [System.GC]::Collect() } }
+        Else { Write-Warning "Excel failed to OPEN for reading guesses: $xl"}      
       }
 }
 $escapemsgkey = [System.Security.SecurityElement]::Escape($msgkey)
@@ -545,6 +581,7 @@ Write-Host -Fore Yellow "Summary for [ $msgkey ]"
 $MG | Format-List *
 If ( $compareimage ) { $compareimage.Delete() ; Remove-Variable compareimage }
 $fsimage.Delete()
+$card++
 <# End Message Loop
  ___       __            ___  __   __        __   ___          __   __   __
 |__  |\ | |  \     |\/| |__  /__` /__`  /\  / _` |__     |    /  \ /  \ |__)
@@ -580,7 +617,7 @@ If ( $Excel ) { $Excel.Quit()
       [System.Runtime.Interopservices.Marshal]::ReleaseComObject($Excel) | Out-Null
       Remove-Variable Excel
       [System.GC]::Collect() }
-Remove-Variable fsimage
+If ($fsimage) {Remove-Variable fsimage}
 Remove-Variable olApp
 [System.GC]::Collect()
 

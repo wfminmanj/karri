@@ -1,5 +1,5 @@
 ﻿$P = @{
-'message_repo' = '\\wfm-team\team\RegionalPurchasing\National Promotions\~cr~repo~\cr_repo_.xml'
+'message_repo' = '\\wfm-team\team\RegionalPurchasing\National Promotions\_dev_repo_\_dev_repo_.xml'
 'opening' = @"
 <html><head><meta http-equiv=Content-Type content="text/html; charset=iso-8859-1"></head><body lang=EN-US>
 <div style="font-family:helvetica"><h1 style='color:#6600CC'>
