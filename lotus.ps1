@@ -45,6 +45,9 @@ Requires SharePoint (user list/library)
 Requires a file system directory as repository where email files will be stored and an xml record will be maintained
 Requires a log file in the system TEMP directory
 to parse markdown syntax on Windows OS, try MarkdownPad 2, further options at http://mashable.com/2013/06/24/markdown-tools/
+#### TODO ####
++ Parameterize
++ Error handling on ZIP extraction with unicode filenames
 #>
 
 Param
@@ -209,8 +212,9 @@ Catch { Write-Host -Back Black -Fore Red "ERROR attempting to match source folde
 Try { $olsrcfolder = $( Recurse-Folders $namespace $P.SourceFolder )[0] }
 Catch { Write-Host -Back Black -Fore Red "ERROR attempting to match source folder name $($P.SourceFolder)" }
 
-## Use this line for Inbox
-$olsrcfolder = $olsrcfolder.Folders | Where-Object { 'Inbox' -Contains $_.Name }
+## When selecting the Inbox by setting the SourceFolder parameter to a mailbox/email
+If ($olsrcfolder.Folders | Where-Object { 'Inbox' -Contains $_.Name }) {
+$olsrcfolder = $olsrcfolder.Folders | Where-Object { 'Inbox' -Contains $_.Name }}
 
 # Get a collection of messages from the source folder
 $colmsg = $olsrcfolder.Items | Where-Object {$_.Categories -match $P.ExportTag}
@@ -293,7 +297,7 @@ If ( Test-Path "$repopath\$msgfn.msg" ) {
               Move-Item "$repopath\$sc\$msgfn.msg" -Destination $nom
               Set-ItemProperty $nom -Name IsReadOnly -Value $true
               $msglkup = Get-Item $nom
-              Write-Host "----> $($msglkup.Name) [$($msglkup.Length)_B]"
+              Write-Host -ForeGroundColor Magenta "----> $($msglkup.Name) [$($msglkup.Length)_B]"
               Add-Content $Logfile -Value "  - **$($i.Subject)**, $($msglkup.Length)_Bytes, at $($msglkup.FullName)"
               $MG.savedfiles ++
            } }
@@ -302,7 +306,7 @@ If ( Test-Path "$repopath\$msgfn.msg" ) {
            Move-Item "$repopath\$sc\$msgfn.msg" -Destination "$repopath\$msgfn.msg"
            Set-ItemProperty "$repopath\$msgfn.msg" -Name IsReadOnly -Value $true
            $msglkup = Get-Item "$repopath\$msgfn.msg"
-           Write-Host "----> $($msglkup.Name) [$($msglkup.Length)_B]"
+           Write-Host -ForeGroundColor Magenta "----> $($msglkup.Name) [$($msglkup.Length)_B]"
            Add-Content $Logfile -Value "  - **$($i.Subject)**, $($msglkup.Length)_Bytes, at $($msglkup.FullName)"
    }
 
@@ -358,38 +362,39 @@ If ( $MG.attachments -gt 0 ) {
     [IO.Compression.ZipFile]::ExtractToDirectory( $b.FullName, "$($b.Directory)\$($b.BaseName)" )
     $fz = $( Get-ChildItem "$($b.Directory)\$($b.BaseName)" -Recurse -File )
     ForEach ( $k in $fz ) {
-        $myfname = $k.Name
+        $myfname = ($k.Name -Replace '[\]]', '}') -Replace '[\[]', '{'
         $kchksum = Get-CheckSum $k.FullName
         $klmdt = $k.LastWriteTime.ToString('s')
         $cimatch = 0
-        ## 
-        If ( Test-Path "$repopath\$($k.Name)") { # When the file name already exists, compare the checksum
+        ## If ( Test-Path "$repopath\$($k.Name)") { # When the file name already exists, compare the checksum
+        If ( Test-Path "$repopath\$($myfname)") { # When the file name already exists, compare the checksum
           ForEach ( $ci in Get-ChildItem "$repopath\$($k.BaseName)*" ) {
                 If ( $kchksum -contains $(Get-Checksum $ci) ) { $cimatch ++ }}}
           If ( $cimatch -gt 0 ) { # When there is a match on checksum, don't save the file
               $MG.skippedfiles ++
-              Add-Content $Logfile -Value "  - **SKIPPING $($k.Name)**"
-              ##
-              Remove-Item "$repopath\$se\$($k.Name)" }
+              ## Add-Content $Logfile -Value "  - **SKIPPING $($k.Name)**"
+              Add-Content $Logfile -Value "  - **SKIPPING $myfname**"
+              ## Remove-Item "$repopath\$se\$($k.Name)" }
+              Remove-Item "$repopath\$se\$myfname" }
           Else { # Move file to destination add try to append a file node
-              ##
-              $nom = Get-UnqFilePath $repopath $k.Name
+              ## $nom = Get-UnqFilePath $repopath $k.Name
+              $nom = Get-UnqFilePath $repopath $myfname
               Move-Item $k.FullName -Destination $nom
               Set-ItemProperty $nom -Name IsReadOnly -Value $true
               $MG.savedfiles ++
               If ( $nom -match '.xls[x|m]?$' ) { $xlfiles += $nom }
-              ##
-              ##
-              ##
-              If ( $usagemode -eq 'FileOnly' ) { Write-Host "----> $($k.Name) [$($k.Length)_B]" }
-              Else { $abody += "<li>$($k.Name) [$($k.Length)_B]</li>" }
-              Add-Content $Logfile -Value "  - **$($k.Name)**, $($k.Length)_Bytes, at $($nom)" }
+              ## If ( $usagemode -eq 'FileOnly' ) { Write-Host "----> $($k.Name) [$($k.Length)_B]" }
+              ## Else { $abody += "<li>$($k.Name) [$($k.Length)_B]</li>" }
+              ## Add-Content $Logfile -Value "  - **$($k.Name)**, $($k.Length)_Bytes, at $($nom)" }
+              If ( $usagemode -eq 'FileOnly' ) { Write-Host -ForeGroundColor Magenta"----> $myfname [$($k.Length)_B]" }
+              Else { $abody += "<li>$myfname [$($k.Length)_B]</li>" }
+              Add-Content $Logfile -Value "  - **$myfname**, $($k.Length)_Bytes, at $($nom)" }
           $nodefile = $X.SelectSingleNode("/repo/messages/msg[@msgkey='$($msgkey)']/attachments/file[@chksum='$($kchksum)']")
           If ( -not $nodefile ) { # When a file node with the current chksum doesn't exist, append the node
               $banana = Get-Item $nom
               $nodefile = $X.CreateElement('file')
-              ## 
-              $nodefile.SetAttribute('name',$k.Name)
+              ## $nodefile.SetAttribute('name',$k.Name)
+              $nodefile.SetAttribute('name',$myfname)
               $nodefile.SetAttribute('lmdt',$klmdt)
               $nodefile.SetAttribute('bytes',$k.Length)
               $nodefile.SetAttribute('chksum',$kchksum)
@@ -426,7 +431,7 @@ If ( $MG.attachments -gt 0 ) {
           ## If ( $usagemode -eq 'FileOnly' ) { Write-Host "----> $($a.FileName) [$($a.Size)_B]" }
           ## Else { $abody += "<li>$($a.FileName) [$($a.Size)_B]</li>" }
           ## Add-Content $Logfile -Value "  - **$($a.FileName)**, $($a.Size)_Bytes, at $($nom)" }
-          If ( $usagemode -eq 'FileOnly' ) { Write-Host "----> $atfn [$($a.Size)_B]" }
+          If ( $usagemode -eq 'FileOnly' ) { Write-Host -ForeGround Magenta "----> $atfn [$($a.Size)_B]" }
           Else { $abody += "<li>$atfn [$($a.Size)_B]</li>" }
           Add-Content $Logfile -Value "  - **$atfn**, $($a.Size)_Bytes, at $($nom)" }
       $nodefile = $X.SelectSingleNode("/repo/messages/msg[@msgkey='$($msgkey)']/attachments/file[@chksum='$($bchksum)']")

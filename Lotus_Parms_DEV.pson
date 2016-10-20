@@ -3,8 +3,8 @@
 'SPListGUID' = '{6ABF96D9-197E-4ED9-AC10-B17C3C9CEC23}'
 'SPViewGUID' = '{154A1E10-E8E8-4DD3-91DC-9B283663DA3D}'
 'RowLimit' = "999"
-'SourceFolder' = 'inbound_response'
-'TargetFolder' = 'inbound_archive'
+'SourceFolder' = 'inbound--response'
+'TargetFolder' = 'inbound--archv'
 'OLEDBProvider' = 'Provider=Microsoft.ACE.OLEDB.12.0'
 'OLEDBExtend' = 'Extended Properties=Excel 12.0'
 'ExportTag' = 'ps1_Export'
