@@ -1,16 +1,16 @@
 @{
 'SPURI' = 'http://sites/global/Grocery/CategoryReview/_vti_bin/Lists.asmx?WSDL'
-'SPListGUID' = '{9FCAECAE-11DF-498E-A539-D208AE7A348D}'
-'SPViewGUID' = '{A909AD19-5FF5-475F-99BF-ED8D4E26E79E}'
+'SPListGUID' = '{6ABF96D9-197E-4ED9-AC10-B17C3C9CEC23}'
+'SPViewGUID' = '{154A1E10-E8E8-4DD3-91DC-9B283663DA3D}'
 'RowLimit' = "999"
-'SourceFolder' = 'Global Grocery Category Review'
-'TargetFolder' = 'Export'
+'SourceFolder' = 'inbound--response'
+'TargetFolder' = 'inbound--archv'
 'OLEDBProvider' = 'Provider=Microsoft.ACE.OLEDB.12.0'
 'OLEDBExtend' = 'Extended Properties=Excel 12.0'
 'ExportTag' = 'ps1_Export'
 'logfile_name' = 'lotus'
 'linksrv' = 'http://localhost:8090/linklkup?msgkey='
-'message_repo' = '\\wfm-team\team\RegionalPurchasing\National Promotions\~cr~repo~\cr_repo_.xml'
+'message_repo' = '\\wfm-team\team\RegionalPurchasing\National Promotions\_dev_repo_\_dev_repo_.xml'
 'mailbox' = 'Global.Grocery.Category.Review@wholefoods.com'
 'prepend' = 'FYI: '
 'opening' = @"

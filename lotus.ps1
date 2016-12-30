@@ -212,6 +212,7 @@ Catch { Write-Host -Back Black -Fore Red "ERROR attempting to match source folde
 Try { $olsrcfolder = $( Recurse-Folders $namespace $P.SourceFolder )[0] }
 Catch { Write-Host -Back Black -Fore Red "ERROR attempting to match source folder name $($P.SourceFolder)" }
 
+
 ## When selecting the Inbox by setting the SourceFolder parameter to a mailbox/email
 If ($olsrcfolder.Folders | Where-Object { 'Inbox' -Contains $_.Name }) {
 $olsrcfolder = $olsrcfolder.Folders | Where-Object { 'Inbox' -Contains $_.Name }}
@@ -368,10 +369,12 @@ If ( $MG.attachments -gt 0 ) {
         $cimatch = 0
         ## If ( Test-Path "$repopath\$($k.Name)") { # When the file name already exists, compare the checksum
         If ( Test-Path "$repopath\$($myfname)") { # When the file name already exists, compare the checksum
+
           ForEach ( $ci in Get-ChildItem "$repopath\$($k.BaseName)*" ) {
                 If ( $kchksum -contains $(Get-Checksum $ci) ) { $cimatch ++ }}}
           If ( $cimatch -gt 0 ) { # When there is a match on checksum, don't save the file
               $MG.skippedfiles ++
+
               ## Add-Content $Logfile -Value "  - **SKIPPING $($k.Name)**"
               Add-Content $Logfile -Value "  - **SKIPPING $myfname**"
               ## Remove-Item "$repopath\$se\$($k.Name)" }
@@ -379,6 +382,7 @@ If ( $MG.attachments -gt 0 ) {
           Else { # Move file to destination add try to append a file node
               ## $nom = Get-UnqFilePath $repopath $k.Name
               $nom = Get-UnqFilePath $repopath $myfname
+
               Move-Item $k.FullName -Destination $nom
               Set-ItemProperty $nom -Name IsReadOnly -Value $true
               $MG.savedfiles ++
@@ -389,6 +393,7 @@ If ( $MG.attachments -gt 0 ) {
               If ( $usagemode -eq 'FileOnly' ) { Write-Host -ForeGroundColor Magenta"----> $myfname [$($k.Length)_B]" }
               Else { $abody += "<li>$myfname [$($k.Length)_B]</li>" }
               Add-Content $Logfile -Value "  - **$myfname**, $($k.Length)_Bytes, at $($nom)" }
+
           $nodefile = $X.SelectSingleNode("/repo/messages/msg[@msgkey='$($msgkey)']/attachments/file[@chksum='$($kchksum)']")
           If ( -not $nodefile ) { # When a file node with the current chksum doesn't exist, append the node
               $banana = Get-Item $nom
