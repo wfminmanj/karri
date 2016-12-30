@@ -32,6 +32,13 @@ $usagemode = 'MsgDisplay'
 
 $P = Get-Content ".\$parmfile.pson" | Out-String | Invoke-Expression
 
+$Logfile = $([System.Environment]::GetEnvironmentVariable('TMP','MACHINE')) + "\$($P.logfile_name).md"
+If (!(Test-Path $Logfile)) {
+   Try { Set-Content -Path $Logfile -Value ($null) }
+   Catch { Write-Error "Logfile not found/valid: $($Logfile)"; Break } }
+$frtime = Get-Date
+Add-Content $Logfile -Value "###Script Start $($frtime.ToString('yyyy-MMM-dd_HH:mm:ss').ToUpper())$nl"
+
 ## Repo XML Existence Check
 If (Test-Path $P.message_repo) {
 $X = New-Object System.Xml.XmlDocument
@@ -198,7 +205,7 @@ $msgerrors = 0
 ForEach ( $i in $orange ) {
 
  #### Begin Decline Message #### $P
-  Write-Progress -Activity "Processing List Items" -Status $i.ows_Subject -PercentComplete $n
+  Write-Progress -Activity "Processing List Items" -Status "$($i.ows_Subject) [ $n of $($orange.count) ]" -PercentComplete (100*($n/$orange.count))
   Write-Host -BackgroundColor Green -ForegroundColor Black "[[ $($i.ows_Subject) ]]" -NoNewline
   # $msgkey = [System.Security.SecurityElement]::Escape(($i.ows_Subject -Replace $re, '-'))
   # $i.ows_MessageLink
@@ -224,7 +231,8 @@ ForEach ( $i in $orange ) {
                   If ( $usagemode -eq 'MsgDisplay' ) { $rail.Display() }
                   ElseIf ( $usagemode -eq 'MsgSend' ) { $rail.Send() } }
                   Catch { $msgerrors ++ } 
-                  Write-Host [char]60 -NoNewline
+                  Write-Host ([char]60) -NoNewline
+                  Add-Content $Logfile -Value "####$usagemode :: $msgkey $nl"
                }
                Else { Write-Host "Repo message not found for [$($i.ows_Subject)]" }
 
@@ -251,12 +259,11 @@ ForEach ( $i in $orange ) {
       $camlItem.AppendChild($camlStatus)  | Out-Null
       $camlItem.AppendChild($camlAction)  | Out-Null
       $camlBatch.AppendChild($camlItem) | Out-Null
-      Write-Host [char]62 -NoNewline
+      Write-Host ([char]62) -NoNewline
     }
 
- ####  End  CAML Batch Build ####
+####  End  CAML Batch Build ####
 
-  
   $itemseq ++
   $n++
   Write-Host "    $itemseq"
@@ -264,7 +271,10 @@ ForEach ( $i in $orange ) {
   $msg = $null
   $peach = $null
   }
+  
 If ($itemseq -gt 1 ) {
+    Add-Content $Logfile -Value "$nl####CAML Batch $nl"
+    $camlBatch.Method.Field | Where-Object { $_.Name -contains 'ID' } | Select-Object '#text' | Add-Content $Logfile
     $xmlDoc.AppendChild($camlBatch) | Out-Null
     $xmlDoc.InsertBefore($xmldecl, $camlBatch) | Out-Null
 
@@ -316,6 +326,8 @@ If ( $usagemode -ne 'SPOnly') {
          }
    }
 #>
+
+Add-Content $Logfile -Value "$nl###Message Processing Complete  $($frtime.ToString('yyyy-MMM-dd_HH:mm:ss').ToUpper())$nl"
 
 #### Wrapup ####
 

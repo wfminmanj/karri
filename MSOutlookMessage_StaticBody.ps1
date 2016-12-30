@@ -112,6 +112,7 @@ $summary | Add-Member -M NoteProperty -Name err_send -Val 0
 $timer = [Diagnostics.Stopwatch]::StartNew()
 ForEach ($i in $list ) {
         $banana = $msg_tmplt.Copy()
+        $banana.SentOnBehalfOfName = $P.From
         $i.dlist.TrimEnd([char]59).Split([char]59) | ForEach-Object { $banana.Recipients.Add($_) | Out-Null }
     Try {
         $banana.Attachments.Add($i.FullName) | Out-Null }
